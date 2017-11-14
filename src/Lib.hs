@@ -18,7 +18,8 @@ data Field
 {- FieldValue is any data type that can be wrapped as a Field and unwrapped
 back to its primitive value; this allows us to wrap and unwrap primitive types
 without knowing what the actual types are, relying on the type system to
-dispatch "wrap" and "unwrap" calls to the right instances -}
+dispatch "wrap" and "unwrap" calls to the right instances. Note the primitive
+type must have an Eq instance, as we plan on comparing it later on -}
 class Eq a =>
       FieldValue a where
   wrap :: a -> Field
