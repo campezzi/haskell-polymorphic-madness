@@ -1,29 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveGeneric #-}
 
 module Lib where
 
-import Data.Aeson
 import Data.Text
-import GHC.Generics
 
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
-
---
-data Operator
-  = Equals
-  | SomethingElse
-  deriving (Show, Generic)
-
-instance FromJSON Operator
-
-instance ToJSON Operator
-
-testDecoding :: Either String Operator
-testDecoding = eitherDecode "\"Equals\""
-
---
 {- FieldName is just an alias to make signatures more readable -}
 type FieldName = Text
 
