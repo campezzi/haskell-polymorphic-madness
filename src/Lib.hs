@@ -1,53 +1,50 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Lib where
 
 import Data.Text
 
-{- FieldName is just an alias to make signatures more readable -}
-type FieldName = Text
-
-{- Field is a "wrapper" for raw values; this enables us to have functions
+{- Value is a "wrapper" for raw values; this enables us to have functions
 that return different types without breaking type-safety -}
-data Field
-  = TextField Text
-  | IntegerField Integer
-  | BoolField Bool
+data Value
+  = TextValue Text
+  | IntegerValue Integer
+  | BoolValue Bool
   deriving (Show)
 
-{- FieldValue is any data type that can be wrapped as a Field and unwrapped
-back to its primitive value; this allows us to wrap and unwrap primitive types
-without knowing what the actual types are, relying on the type system to
-dispatch "wrap" and "unwrap" calls to the right instances. Note the primitive
-type must have an Eq instance, as we plan on comparing it later on -}
+{- FromValue is any type that can be unwrapped from a Value back to its raw
+form; since we usually unwrap values without knowing its internal type,
+we can't be certain the unwrapping will be successful - ie. if we try to
+unwrap a TextValue in an area where a Bool is necessary, the operation can
+fail; to account for that possibility, unwrap has to return a Maybe -}
 class Eq a =>
-      FieldValue a where
-  wrap :: a -> Field
-  unwrap :: Field -> Maybe a
+      ValueWrappable a where
+  wrap :: a -> Value
+  unwrap :: Value -> Maybe a
 
-{- Here we "teach" Text, Integer and Bool values to wrap and unwrap
-themselves in/from a Field by creating instances of FieldValue -}
-instance FieldValue Text where
-  wrap = TextField
-  unwrap (TextField v) = Just v
+{- Here we "teach" Text, Integer and Bool values to unwrap themselves from a
+Value by defining instances of FromValue -}
+instance ValueWrappable Text where
+  wrap = TextValue
+  unwrap (TextValue v) = Just v
   unwrap _ = Nothing
 
-instance FieldValue Integer where
-  wrap = IntegerField
-  unwrap (IntegerField v) = Just v
+instance ValueWrappable Integer where
+  wrap = IntegerValue
+  unwrap (IntegerValue v) = Just v
   unwrap _ = Nothing
 
-instance FieldValue Bool where
-  wrap = BoolField
-  unwrap (BoolField v) = Just v
+instance ValueWrappable Bool where
+  wrap = BoolValue
+  unwrap (BoolValue v) = Just v
   unwrap _ = Nothing
 
-{- Record is anything that contains data that is "gettable" by field name;
+{- Record is anything that contains data that is "gettable" by FieldName;
 since a Record can have multiple fields with different types, the "getValue"
-function has to return a Field. Also, because there may not be a field with
-that name on the Record, this Field has to be wrapped in a Maybe -}
-class Record a where
-  getValue :: FieldName -> a -> Maybe Field
+function has to return a Field. -}
+class Record r f where
+  getValue :: f -> r -> Value
 
 {- Some sample data types and convenience constructors... -}
 data Person = Person
@@ -55,37 +52,44 @@ data Person = Person
   , age :: Integer
   } deriving (Show)
 
+data PersonField
+  = Name
+  | Age
+  deriving (Eq)
+
+samplePerson :: Person
+samplePerson = Person "Thiago" 35
+
 data Pet = Pet
   { petName :: Text
   , dangerous :: Bool
   } deriving (Show)
 
-samplePerson :: Person
-samplePerson = Person "Thiago" 35
+data PetField
+  = PetName
+  | Dangerous
+  deriving (Eq)
 
 samplePet :: Pet
 samplePet = Pet "Frankie" False
 
 {- Here we define instances of Record for Person and Pet, "teaching" them
 how to fetch values based on field names -}
-instance Record Person where
-  getValue "name" = Just . wrap . name
-  getValue "age" = Just . wrap . age
-  getValue _ = const Nothing
+instance Record Person PersonField where
+  getValue Name = wrap . name
+  getValue Age = wrap . age
 
-instance Record Pet where
-  getValue "name" = Just . wrap . petName
-  getValue "dangerous" = Just . wrap . dangerous
+instance Record Pet PetField where
+  getValue PetName = wrap . petName
+  getValue Dangerous = wrap . dangerous
 
-{- This is where the magic happens! Given a field name, an expected value and
+{- This is where the magic happens! Given a field, an expected value and
 a record, this returns True if the actual value on that field matches the
 expected or False otherwise. It also returns False if the given field name
 does not exist or if the type of the expected parameter doesn't match the
 type of the actual value on the record -}
-match :: (FieldValue a, Record r) => FieldName -> a -> r -> Bool
-match field expected record =
-  case wrapped >>= unwrap of
+satisfies :: (ValueWrappable v, Record r f) => f -> v -> r -> Bool
+satisfies field expected record =
+  case unwrap $ getValue field record of
     Just value -> value == expected
     Nothing -> False
-  where
-    wrapped = getValue field record
